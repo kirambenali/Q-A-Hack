@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="StepWise Pitch Assistant — real-time Q&A and AI answers for SIRIUS Imagine Cup 2026" />
+  <title>StepWise Pitch Assistant — SIRIUS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script
+    src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@1.33.0/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --color-text-primary: #0f172a;
+      --color-text-secondary: #64748b;
+      --color-background-primary: #ffffff;
+      --color-background-secondary: #f8fafc;
+      --color-border-secondary: #e2e8f0;
+      --color-border-tertiary: #f1f5f9;
+      --border-radius-sm: 6px;
+      --border-radius-md: 8px;
+      --border-radius-lg: 12px;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-background-secondary);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 680px;
+      background: var(--color-background-primary);
+      border-radius: 16px;
+      border: 0.5px solid var(--color-border-secondary);
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, .06);
+      height: fit-content;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7F77DD, #4f46e5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #fff;
+      font-weight: 600;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(127, 119, 221, .4);
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .subtitle {
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      margin-top: 1px;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 1rem;
+    }
+
+    .tab {
+      padding: 7px 14px;
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      font-size: 13px;
+      cursor: pointer;
+      background: var(--color-background-secondary);
+      color: var(--color-text-secondary);
+      transition: all .15s;
+    }
+
+    .tab.active {
+      background: #7F77DD;
+      color: #fff;
+      border-color: #7F77DD;
+    }
+
+    /* ── Search ──────────────────────────────────────────────── */
+    .search-box {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-lg);
+      font-size: 14px;
+      font-family: var(--font-sans);
+      background: var(--color-background-primary);
+      color: var(--color-text-primary);
+      transition: border-color .15s, box-shadow .15s;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: #7F77DD;
+      box-shadow: 0 0 0 2px #EEEDFE;
+    }
+
+    .btn-search {
+      padding: 10px 18px;
+      background: #7F77DD;
+      color: #fff;
+      border: none;
+      border-radius: var(--border-radius-lg);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s;
+    }
+
+    .btn-search:hover {
+      background: #534AB7;
+    }
+
+    /* ── Tags ────────────────────────────────────────────────── */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .tag {
+      padding: 4px 10px;
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      background: var(--color-background-secondary);
+      color: var(--color-text-secondary);
+      transition: all .15s;
+    }
+
+    .tag:hover,
+    .tag.active {
+      background: #EEEDFE;
+      border-color: #AFA9EC;
+      color: #3C3489;
+    }
+
+    /* ── Result cards ────────────────────────────────────────── */
+    .result-card {
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 1rem 1.25rem;
+      margin-bottom: .75rem;
+      transition: box-shadow .15s;
+    }
+
+    .result-card:hover {
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+    }
+
+    .result-card.ai {
+      border-left: 3px solid #7F77DD;
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .slide-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: #EEEDFE;
+      color: #3C3489;
+      font-weight: 500;
+    }
+
+    .question-text {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      margin-bottom: 8px;
+      font-style: italic;
+    }
+
+    .answer-text {
+      font-size: 14px;
+      color: var(--color-text-primary);
+      line-height: 1.65;
+    }
+
+    .answer-text strong {
+      font-weight: 500;
+      color: #3C3489;
+    }
+
+    /* ── TTS bar ──────────────────────────────────────────────── */
+    .tts-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 0.5px solid var(--color-border-tertiary);
+    }
+
+    .btn-speak {
+      padding: 6px 12px;
+      background: #1D9E75;
+      color: #fff;
+      border: none;
+      border-radius: var(--border-radius-md);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+
+    .btn-speak:hover {
+      background: #0F6E56;
+    }
+
+    .btn-speak.speaking {
+      background: #e05252;
+      animation: pulse 1s infinite;
+    }
+
+    .btn-copy {
+      padding: 6px 12px;
+      background: var(--color-background-secondary);
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--color-text-primary);
+      transition: background .15s;
+    }
+
+    .btn-copy:hover {
+      background: var(--color-border-tertiary);
+    }
+
+    /* ── Buttons ──────────────────────────────────────────────── */
+    .btn-sm {
+      padding: 8px 12px;
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--color-text-primary);
+      transition: background .15s;
+    }
+
+    .btn-sm:hover {
+      background: var(--color-background-secondary);
+    }
+
+    .btn-primary {
+      background: #7F77DD !important;
+      color: #fff !important;
+      border: none !important;
+    }
+
+    .btn-primary:hover {
+      background: #534AB7 !important;
+    }
+
+    /* ── API / Settings section ───────────────────────────────── */
+    .api-section {
+      background: var(--color-background-secondary);
+      border-radius: var(--border-radius-lg);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      border: 0.5px solid var(--color-border-tertiary);
+    }
+
+    .api-section-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .api-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .api-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 13px;
+      font-family: var(--font-sans);
+      background: var(--color-background-primary);
+      color: var(--color-text-primary);
+    }
+
+    .api-input:focus {
+      outline: none;
+      border-color: #7F77DD;
+    }
+
+    /* ── Status badge ─────────────────────────────────────────── */
+    .status {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      padding: 4px 0;
+    }
+
+    .status.success {
+      color: #1D9E75;
+    }
+
+    .status.error {
+      color: #D85A30;
+    }
+
+    .config-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .config-badge.ok {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    .config-badge.missing {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+
+    .config-badge.warn {
+      background: #fef9c3;
+      color: #854d0e;
+    }
+
+    /* ── AI loading ───────────────────────────────────────────── */
+    .ai-loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 1rem;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #7F77DD;
+      animation: bounce 1s infinite;
+      display: inline-block;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: .2s;
+    }
+
+    .dot:nth-child(3) {
+      animation-delay: .4s;
+    }
+
+    /* ── No result ────────────────────────────────────────────── */
+    .no-result {
+      text-align: center;
+      padding: 2rem;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+    }
+
+    /* ── Animations ───────────────────────────────────────────── */
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .5
+      }
+    }
+
+    @keyframes bounce {
+
+      0%,
+      100% {
+        transform: translateY(0)
+      }
+
+      50% {
+        transform: translateY(-4px)
+      }
+    }
+
+    /* ── Q&A Room UI ─────────────────────────────────────────── */
+    .room-container {
+      display: none;
+      margin-top: 1rem;
+      border-top: 1px solid var(--color-border-secondary);
+      padding-top: 1.5rem;
+    }
+
+    .room-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .room-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #7F77DD;
+    }
+
+    .user-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 20px;
+    }
+
+    .user-card {
+      background: var(--color-background-primary);
+      border: 1px solid var(--color-border-secondary);
+      border-radius: 20px;
+      padding: 24px 16px;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+
+    .user-card.me {
+      border-color: #7F77DD;
+      border-width: 2px;
+      box-shadow: 0 10px 25px rgba(127, 119, 221, 0.15);
+      background: #fff;
+    }
+
+    .user-name {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--color-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .num-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .num-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      border: 1.5px solid var(--color-border-secondary);
+      background: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      color: var(--color-text-secondary);
+    }
+
+    .num-btn:hover {
+      border-color: #7F77DD;
+      color: #7F77DD;
+      background: #F5F3FF;
+      transform: translateY(-2px);
+    }
+
+    .num-btn.active {
+      background: #7F77DD;
+      color: #fff;
+      border-color: #7F77DD;
+      transform: scale(1.1);
+      box-shadow: 0 6px 15px rgba(127, 119, 221, 0.4);
+    }
+
+    .room-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .dialog-card {
+      background: #fff;
+      padding: 1.75rem;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 340px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .dialog-card h3 {
+      font-size: 18px;
+      margin-bottom: 1rem;
+      color: var(--color-text-primary);
+    }
+
+    .dialog-card input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--color-border-secondary);
+      margin-bottom: 1rem;
+      font-family: var(--font-sans);
+    }
+
+    .dialog-card .btn-primary {
+      width: 100%;
+      padding: 12px;
+      font-size: 14px;
+    }
+
+    /* Action toast */
+    #action-toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 30px;
+      font-size: 13px;
+      display: none;
+      z-index: 3000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">S</div>
+      <div style="flex: 1">
+        <div class="title">StepWise Pitch Assistant</div>
+        <div class="subtitle">SIRIUS — Imagine Cup 2026</div>
+      </div>
+      <button class="btn-sm btn-primary" id="btn-qa-room" onclick="openNameDialog()">Q&amp;A Choose</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('search')">Search Q&amp;A</div>
+      <div class="tab" onclick="switchTab('ai')">Ask AI (GPT)</div>
+      <div class="tab" onclick="switchTab('settings')">Settings</div>
+    </div>
+
+    <!-- ── TAB: Search ─────────────────────────────────────────── -->
+    <div id="tab-search">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Type a keyword… e.g. 'azure cost', 'otsimo', '$20'"
+          oninput="search()" onkeydown="if(event.key==='Enter')search()" />
+        <button class="btn-search" onclick="search()">Search</button>
+      </div>
+      <div class="tags" id="tagContainer"></div>
+      <div id="results"></div>
+    </div>
+
+    <!-- ── TAB: Ask AI ─────────────────────────────────────────── -->
+    <div id="tab-ai" style="display:none">
+      <div class="result-card">
+        <div class="question-text">Ask anything — Azure GPT will answer as the StepWise pitch expert</div>
+        <textarea id="aiQuestion"
+          style="width:100%;padding:10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:14px;background:var(--color-background-primary);color:var(--color-text-primary);resize:vertical;min-height:80px;font-family:var(--font-sans)"
+          placeholder="e.g. How do you justify $20/month pricing?"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-search" style="flex:1" onclick="askAI()">Ask GPT</button>
+          <button class="btn-search" id="btnMic" style="background:#1D9E75" onclick="startSTT()"><span
+              style="margin-right:4px">🎤</span> Speak</button>
+        </div>
+        <div id="aiResult" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Settings ───────────────────────────────────────── -->
+    <div id="tab-settings" style="display:none">
+
+      <!-- Azure config status banner -->
+      <div id="configBanner" class="api-section" style="margin-bottom:1rem"></div>
+
+      <!-- Azure OpenAI override (only shown when not injected by server) -->
+      <div id="manualOpenAI" class="api-section" style="display:none">
+        <div class="api-section-title">⚡ Azure OpenAI — manual config</div>
+        <div class="api-row">
+          <input type="text" class="api-input" id="cfgEndpoint" placeholder="https://YOUR-RESOURCE.openai.azure.com/" />
+        </div>
+        <div class="api-row">
+          <input type="password" class="api-input" id="cfgKey" placeholder="Azure OpenAI key" />
+          <input type="text" class="api-input" id="cfgDeployment" placeholder="Deployment name (gpt-4o)"
+            style="max-width:180px" />
+        </div>
+        <div class="api-row">
+          <button class="btn-sm btn-primary" onclick="saveOpenAI()">Save OpenAI config</button>
+        </div>
+        <div id="openAIStatus" class="status"></div>
+      </div>
+
+      <!-- Azure Speech override (only shown when not injected by server) -->
+      <div id="manualSpeech" class="api-section" style="display:none">
+        <div class="api-section-title">🔊 Azure Speech — manual config</div>
+        <div class="api-row">
+          <input type="text" class="api-input" id="cfgSpeechEndpoint"
+            placeholder="https://switzerlandnorth.api.cognitive.microsoft.com/" />
+        </div>
+        <div class="api-row">
+          <input type="password" class="api-input" id="cfgSpeechKey" placeholder="Azure Speech key" />
+        </div>
+        <div class="api-row">
+          <button class="btn-sm btn-primary" onclick="saveSpeech()">Save Speech config</button>
+        </div>
+        <div id="speechStatus" class="status"></div>
+      </div>
+
+      <!-- TTS Voice preferences (always shown) -->
+      <div class="api-section">
+        <div class="api-section-title">🗣 TTS Voice Preferences</div>
+        <div class="api-row">
+          <select id="ttsVoice" class="api-input" onchange="saveTTSPrefs()">
+            <option value="en-US-GuyNeural">Guy (Male, en-US)</option>
+            <option value="en-US-DavisNeural">Davis (Male, en-US)</option>
+            <option value="en-US-TonyNeural">Tony (Male, en-US)</option>
+            <option value="en-US-JennyNeural">Jenny (Female, en-US)</option>
+            <option value="en-US-AriaNeural">Aria (Female, en-US)</option>
+            <option value="en-US-NancyNeural">Nancy (Female, en-US)</option>
+            <option value="en-GB-RyanNeural">Ryan (Male, en-GB)</option>
+            <option value="en-GB-SoniaNeural">Sonia (Female, en-GB)</option>
+          </select>
+        </div>
+        <div class="api-row">
+          <select id="ttsRate" class="api-input" onchange="saveTTSPrefs()">
+            <option value="-10%">Slightly slow (−10%)</option>
+            <option value="-5%">Near-normal (−5%)</option>
+            <option value="0%">Normal</option>
+            <option value="+5%">Slightly fast (+5%)</option>
+          </select>
+          <button class="btn-sm btn-primary" onclick="testTTS()">Test voice</button>
+        </div>
+        <div id="ttsStatus" class="status"></div>
+      </div>
+
+    </div><!-- /tab-settings -->
+
+    <!-- ── Q&A Room ────────────────────────────────────────────── -->
+    <div id="tab-room" class="room-container">
+      <div class="room-header">
+        <div class="room-title">StepWise Live Room</div>
+        <button class="btn-sm" onclick="leaveRoom()">Leave Room</button>
+      </div>
+      <div class="user-grid" id="user-grid">
+        <!-- Users will be injected here -->
+      </div>
+    </div>
+
+  </div><!-- /app -->
+
+  <!-- Name Entry Dialog -->
+  <div id="room-overlay" class="room-overlay" onclick="if(event.target===this)closeNameDialog()">
+    <div class="dialog-card">
+      <h3>Join Q&amp;A Room</h3>
+      <input type="text" id="userNameInput" placeholder="Enter your name..."
+        onkeydown="if(event.key==='Enter')joinRoom()" />
+      <button class="btn-sm btn-primary" onclick="joinRoom()">Join Discussion</button>
+    </div>
+  </div>
+
+  <div id="action-toast"></div>
+
+  <script>
+    /* ─── Q&A DATA ──────────────────────────────────────────────────────────── */
+    const QA_DATA = [
+      {
+        slide: "Slide 1 — Opening",
+        keywords: ["rima", "emotion", "story", "opening", "psychiatrist", "feeling"],
+        question: "Why did you start with an emotional story?",
+        answer: "The story of Rima is real — but so are the numbers behind it. 6 million children with Down syndrome worldwide. 100% face developmental delays. 90% of families report burnout. The emotion is the insight. The insight is the business."
+      },
+      {
+        slide: "Slide 2 — Problem",
+        keywords: ["100%", "problem", "delay", "developmental", "statistic", "source", "6 million", "families", "helpless"],
+        question: "Are your statistics reliable?",
+        answer: "All sources are cited: downsyndrome.in, globaldownsyndrome.org, sperochildinternational.org. The 100% developmental delay is medical consensus — Down syndrome is caused by an extra chromosome 21, affecting cognitive and motor development in every case. The real market is 12 million families, not just 6 million children."
+      },
+      {
+        slide: "Slide 3 — Team",
+        keywords: ["team", "student", "graduate", "graduation", "tunisia", "3 people", "three", "sirius", "why you", "right team"],
+        question: "Why are 3 students from Tunisia the right team?",
+        answer: "Because we come from the community we serve. We didn't read about this problem in a textbook — we saw it in our neighborhood, our friends' families. That proximity gave us access to 75 parents and 45 children who trusted us with their most vulnerable family members. Graduation changes our schedule. It does not change our commitment. StepWise is our startup — not a school project."
+      },
+      {
+        slide: "Slide 4 — Demo",
+        keywords: ["demo", "video", "live", "pre-recorded", "why video", "app working", "azure demo"],
+        question: "Why a pre-recorded video and not a live demo?",
+        answer: "The app is live at app.step-wise.pro right now — you can test it during this call. We chose pre-recorded to guarantee the best visual experience without network or camera dependencies. Every interaction in that video is real — real Azure API calls, real AI responses, real children's data patterns."
+      },
+      {
+        slide: "Slide 5 — Azure Architecture",
+        keywords: ["azure", "cost", "price", "gpt-4o", "speech", "webrtc", "foundry", "architecture", "technical", "api", "services", "how much", "per user", "margin", "25k", "credit", "$25"],
+        question: "What is your Azure cost per user per month?",
+        answer: "Our Azure cost per active premium user is $4.20/month. Breakdown: Azure Speech STT+TTS = $3.10 (dominant cost), Pronunciation Assessment = $0.75, GPT-4o Vision = $0.11, Infrastructure = $0.24. At $20 revenue → 79% gross margin. Microsoft gave us $25,000 in Azure credits — at 500 users that covers 11 months of full operations, taking us past our break-even point of 300 users."
+      },
+      {
+        slide: "Slide 5 — Azure Architecture",
+        keywords: ["webrtc", "legacy", "realtime", "latency", "why webrtc", "protocol"],
+        question: "Why did you use the legacy WebRTC protocol?",
+        answer: "For one reason: latency. Children with Down syndrome lose engagement if there's a delay in response. The legacy WebRTC protocol gives us sub-2-second end-to-end response time on mobile. We tested both the native Azure Realtime API and WebRTC. WebRTC was faster and more stable on iOS and Android — our primary platforms. We chose what works best for the child, not what looks best on paper."
+      },
+      {
+        slide: "Slide 6 — Ethics",
+        keywords: ["screen", "addiction", "ethical", "gdpr", "coppa", "privacy", "2fa", "responsible", "ai", "dyslexia", "multilingual", "inclusive"],
+        question: "How does StepWise prevent screen addiction?",
+        answer: "Three mechanisms: (1) Daily task limits built into free tier — when done, done. (2) Every AI interaction ends with a real-world action: making the bed, brushing teeth, going outside. The app celebrates completion then encourages the child to live their life. (3) Parent dashboard notifications if the child exceeds normal usage. The app is designed to make itself unnecessary — one step at a time."
+      },
+      {
+        slide: "Slide 7 — Differentiation",
+        keywords: ["otsimo", "competitor", "competition", "321 playsy", "magrid", "better", "unique", "differentiation", "vs", "versus", "copy", "feature"],
+        question: "How do you compete with Otsimo (500K users, millions in funding)?",
+        answer: "Otsimo is built for autism — Down syndrome is secondary for them. We are built exclusively for Down syndrome. Our real differentiator: our AI video assistant validates physical task completion through the camera. When a child takes a photo of their room, Azure GPT-4o Vision gives real, specific feedback based on what it actually sees. Otsimo cannot do this. No competitor can do this today."
+      },
+      {
+        slide: "Slide 8 — Business Model",
+        keywords: ["$20", "pricing", "price", "why 20", "revenue", "money", "paying", "users", "zero", "mrr", "arr", "gross margin", "profit", "cost", "afford", "free", "premium", "organization", "association"],
+        question: "Why $20/month and what is your gross margin?",
+        answer: "Three price benchmarks: (1) Otsimo charges $10-$30/month. (2) One speech therapy session = $50-$150 — StepWise costs less than one session for daily AI support. (3) $20 is accessible for middle-class families in MENA. Gross margin: Azure cost $4.20/user → $20 revenue → 79% margin. Break-even at 300 users = $6,000 MRR against $2,245 Azure cost."
+      },
+      {
+        slide: "Slide 8 — Business Model",
+        keywords: ["zero paying", "no revenue", "no users", "not charging", "why not charge", "start charging", "when revenue", "500 users", "q1 2027"],
+        question: "You have zero paying users. Why should I believe this is a real business?",
+        answer: "We made a deliberate strategic choice: validate safety before charging. When building for children with cognitive disabilities, you don't charge before specialists confirm it works. We got certified by psychomotricians in May 2025. Beta launches November 2026. We project 500 users by Q1 2027 from 3 channels: 150 from association partners, 45 from our tested community (60% conversion), 300 from World Down Syndrome Day campaign."
+      },
+      {
+        slide: "Slide 8 — Business Model",
+        keywords: ["organization", "association plan", "custom", "b2b", "therapy", "school", "hospital", "signed", "contract", "letter of intent"],
+        question: "What do organizations pay and do you have signed contracts?",
+        answer: "Organizations pay: ~$150/month for up to 20 children, ~$300/month for up to 50 children, custom above that. No signed contracts yet — we are pre-launch. But we have something more valuable: trust. Three associations in Tunisia whose children used our app and whose directors have seen the results. That trust converts to a contract at our November 2026 launch."
+      },
+      {
+        slide: "Slide 9 — Timeline",
+        keywords: ["psychomotrician", "certified", "certification", "traction", "75", "45", "20", "tested", "validation", "feedback", "what changed", "improvement"],
+        question: "What did psychomotricians certify exactly?",
+        answer: "Psychomotricians are certified specialists in motor and cognitive development for children with disabilities. They evaluated StepWise on: (1) Safety — no harmful behavioral patterns. (2) Therapeutic alignment — routines match standard protocols for Down syndrome. (3) Child engagement — children benefit. Most impactful user feedback: AI responses were too complex. We redesigned all prompts to a maximum of 7 words per instruction, added emoji reinforcement and audio celebrations. That single change drove the biggest improvement across all 45+ children."
+      },
+      {
+        slide: "Slide 10 — Roadmap",
+        keywords: ["$300k", "$36m", "$2.1b", "roadmap", "scale", "market", "som", "sam", "tom", "tunisia", "mena", "global", "2027", "2028", "2030", "30 partners", "realistic", "expansion"],
+        question: "How do you go from $300K in Tunisia to $2.1B globally?",
+        answer: "Three stages: (1) Tunisia Jan 2027: 12,400 children with DS, 10% penetration = 1,240 users × $20 = $297,600 ≈ $300K. (2) MENA Jan 2028: 1.5M affected, 30+ association partners, 2% penetration = $7.2M ARR (the $36M is total market, we capture 20%). (3) Global 2030 + Autism: 88M population, 0.1% = 88,000 users × $20 = $21M ARR. The $2.1B is total market — we need 1% to reach $21M ARR."
+      },
+      {
+        slide: "Slide 11 — Go to Market",
+        keywords: ["cac", "customer acquisition", "acquire", "1000 users", "first users", "how", "channel", "marketing", "influencer", "community", "ndss", "edsa", "partner"],
+        question: "What is your Customer Acquisition Cost and how do you get first 1,000 users?",
+        answer: "Three channels: (1) Association partnerships → near-zero CAC, one meeting gives access to 50-200 families. (2) Direct digital (Facebook parent groups) → $15-25 per family. (3) World Down Syndrome Day March 21 → ~$500 for 300 users = $1.67 CAC. Blended CAC: $8-12/user. LTV at $20/month × 24 months = $480. LTV:CAC ratio = 40:1 — exceptionally strong for SaaS."
+      },
+      {
+        slide: "Slide 12 — Closing",
+        keywords: ["win", "$100k", "if you win", "tomorrow", "next step", "microsoft startup", "money", "invest", "spend", "budget"],
+        question: "If you win today, what's the first thing you do? How do you spend $100K?",
+        answer: "First 48 hours: (1) Call 3 Tunisian association directors — a Microsoft win converts trusted relationships to signed contracts. (2) Apply for Microsoft for Startups to extend our Azure partnership. (3) Reach NDSS and EDSA as 'Microsoft Imagine Cup Semifinalists.' If $100K: $40K Azure infrastructure scale-up, $35K association partnership activation (10 signed deals), $25K clinical content expansion with 2 part-time psychomotricians building the task library for ages 4-18."
+      },
+      {
+        slide: "Business — Azure $25K",
+        keywords: ["25k", "azure credit", "microsoft credit", "credit", "budget", "runway", "how long", "expire", "run out"],
+        question: "How long does your $25K Azure credit last?",
+        answer: "At 500 active users, our monthly Azure cost is $2,245/month ($2,100 for user AI + $145 infrastructure). $25,000 ÷ $2,245 = 11 months of full operations — from November 2026 to October 2027. But we don't need all 11 months. Break-even at 300 users = $6,000 MRR against $2,245 Azure cost. We reach that in Q1 2027 — 3 months after launch. After that, Azure pays for itself from revenue. The $25K is our launchpad, not our lifeline."
+      }
+    ];
+
+    const TAGS = ["azure cost", "otsimo", "$20", "no revenue", "psychomotrician", "$300K", "CAC", "webrtc", "25K credit", "screen addiction", "break-even", "graduation"];
+
+    /* ─── CONFIG HELPERS ─────────────────────────────────────────────────────── */
+    // window.AZURE_CONFIG is injected by server.js from .env
+    // If opened directly (no server), fall back to manual localStorage values
+
+    function getOpenAIConfig() {
+      const sv = window.AZURE_CONFIG && window.AZURE_CONFIG.openai;
+      if (sv && sv.key) return sv;                          // from server / .env
+      return {
+        endpoint: localStorage.getItem('az_oai_endpoint') || '',
+        key: localStorage.getItem('az_oai_key') || '',
+        deployment: localStorage.getItem('az_oai_deployment') || 'gpt-4o'
+      };
+    }
+
+    function getSpeechConfig() {
+      const sv = window.AZURE_CONFIG && window.AZURE_CONFIG.speech;
+      if (sv && sv.key) return sv;                          // from server / .env
+      return {
+        endpoint: localStorage.getItem('az_speech_endpoint') || '',
+        region: localStorage.getItem('az_speech_region') || 'eastus',
+        key: localStorage.getItem('az_speech_key') || ''
+      };
+    }
+
+    function fromServer() {
+      return window.AZURE_CONFIG &&
+        window.AZURE_CONFIG.openai && window.AZURE_CONFIG.openai.key;
+    }
+
+    /* ─── ESCAPE HELPERS ─────────────────────────────────────────────────────── */
+    function escSSML(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    }
+
+    /* ─── STATE ──────────────────────────────────────────────────────────────── */
+    let currentAudio = null;
+    let activeSpeakId = null;
+
+    /* ─── INIT ───────────────────────────────────────────────────────────────── */
+    function init() {
+      // Tags
+      const container = document.getElementById('tagContainer');
+      TAGS.forEach(tag => {
+        const el = document.createElement('div');
+        el.className = 'tag';
+        el.textContent = tag;
+        el.onclick = () => { document.getElementById('searchInput').value = tag; search(); };
+        container.appendChild(el);
+      });
+
+      // TTS prefs
+      const savedVoice = localStorage.getItem('az_tts_voice') || 'en-US-GuyNeural';
+      const savedRate = localStorage.getItem('az_tts_rate') || '-10%';
+      document.getElementById('ttsVoice').value = savedVoice;
+      document.getElementById('ttsRate').value = savedRate;
+
+      renderConfigBanner();
+      showAll();
+    }
+
+    /* ─── CONFIG BANNER ──────────────────────────────────────────────────────── */
+    function renderConfigBanner() {
+      const banner = document.getElementById('configBanner');
+      const oai = getOpenAIConfig();
+      const sp = getSpeechConfig();
+      const isServ = fromServer();
+
+      const badge = (ok, label) =>
+        `<span class="config-badge ${ok ? 'ok' : 'missing'}">${ok ? '✅' : '❌'} ${label}</span>`;
+
+      const source = isServ
+        ? `<span class="config-badge ok">🔑 Loaded from .env</span>`
+        : `<span class="config-badge warn">⚙️ Manual (localStorage)</span>`;
+
+      banner.innerHTML = `
+    <div class="api-section-title">Azure Configuration ${source}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+      ${badge(oai.key, 'OpenAI Key')}
+      ${badge(oai.endpoint, 'OpenAI Endpoint')}
+      ${badge(oai.deployment, 'Deployment')}
+      ${badge(sp.key, 'Speech Key')}
+      ${badge(sp.endpoint || sp.region, 'Speech Endpoint')}
+    </div>`;
+
+      // Show manual forms only when NOT loaded from server
+      if (!isServ) {
+        document.getElementById('manualOpenAI').style.display = 'block';
+        document.getElementById('manualSpeech').style.display = 'block';
+        document.getElementById('cfgEndpoint').value = oai.endpoint;
+        document.getElementById('cfgKey').value = oai.key;
+        document.getElementById('cfgDeployment').value = oai.deployment;
+        document.getElementById('cfgSpeechEndpoint').value = sp.endpoint;
+        document.getElementById('cfgSpeechKey').value = sp.key;
+      }
+    }
+
+    /* ─── SAVE MANUAL SETTINGS ───────────────────────────────────────────────── */
+    function saveOpenAI() {
+      localStorage.setItem('az_oai_endpoint', document.getElementById('cfgEndpoint').value.trim());
+      localStorage.setItem('az_oai_key', document.getElementById('cfgKey').value.trim());
+      localStorage.setItem('az_oai_deployment', document.getElementById('cfgDeployment').value.trim() || 'gpt-4o');
+      flash('openAIStatus', 'Saved!', 'success');
+      renderConfigBanner();
+    }
+    function saveSpeech() {
+      const ep = document.getElementById('cfgSpeechEndpoint').value.trim();
+      localStorage.setItem('az_speech_endpoint', ep);
+      localStorage.setItem('az_speech_region', regionFromUrl(ep));
+      localStorage.setItem('az_speech_key', document.getElementById('cfgSpeechKey').value.trim());
+      flash('speechStatus', 'Saved!', 'success');
+      renderConfigBanner();
+    }
+    function saveTTSPrefs() {
+      localStorage.setItem('az_tts_voice', document.getElementById('ttsVoice').value);
+      localStorage.setItem('az_tts_rate', document.getElementById('ttsRate').value);
+    }
+    function regionFromUrl(url) {
+      try { return new URL(url).hostname.split('.')[0]; } catch (_) { return 'eastus'; }
+    }
+    function flash(id, msg, cls) {
+      const el = document.getElementById(id);
+      el.textContent = msg; el.className = 'status ' + cls;
+      setTimeout(() => { el.textContent = ''; el.className = 'status'; }, 2500);
+    }
+
+    /* ─── SEARCH ─────────────────────────────────────────────────────────────── */
+    function showAll() {
+      const results = document.getElementById('results');
+      results.innerHTML = QA_DATA.slice(0, 4).map(renderCard).join('') +
+        `<div style="text-align:center;padding:.5rem;font-size:12px;color:var(--color-text-secondary)">Type a keyword to search all ${QA_DATA.length} answers</div>`;
+    }
+    function search() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      if (!q) { showAll(); return; }
+      const matches = QA_DATA.filter(item =>
+        item.keywords.some(k => k.includes(q) || q.includes(k)) ||
+        item.question.toLowerCase().includes(q) ||
+        item.answer.toLowerCase().includes(q) ||
+        item.slide.toLowerCase().includes(q)
+      );
+      document.getElementById('results').innerHTML = matches.length
+        ? matches.map(renderCard).join('')
+        : `<div class="no-result">No result for "${q}"<br><span style="font-size:12px">Try: azure, otsimo, $20, revenue, team, demo</span></div>`;
+    }
+
+    /* ─── RENDER CARD ────────────────────────────────────────────────────────── */
+    function renderCard(item) {
+      const short = item.answer.length > 200 ? item.answer.substring(0, 200) + '…' : item.answer;
+      const id = Math.random().toString(36).substr(2, 9);
+      return `<div class="result-card" id="card-${id}">
+    <div class="result-header"><span class="slide-badge">${item.slide}</span></div>
+    <div class="question-text">"${item.question}"</div>
+    <div class="answer-text" id="ans-${id}">${short}</div>
+    ${item.answer.length > 200 ? `<div style="margin-top:6px"><span style="font-size:12px;color:#7F77DD;cursor:pointer" onclick="expand('${id}','${encodeURIComponent(item.answer)}')">Show full answer ▾</span></div>` : ''}
+    <div class="tts-bar">
+      <button class="btn-speak" id="spk-${id}" onclick="speak('${encodeURIComponent(item.answer)}','${id}')">▶ Speak</button>
+      <button class="btn-copy" onclick="copyText('${encodeURIComponent(item.answer)}',this)">Copy</button>
+      <span id="txt-${id}" style="font-size:11px;color:var(--color-text-secondary)"></span>
+    </div>
+  </div>`;
+    }
+
+    function expand(id, encoded) {
+      document.getElementById('ans-' + id).textContent = decodeURIComponent(encoded);
+      event.target.style.display = 'none';
+    }
+    function copyText(encoded, btn) {
+      navigator.clipboard.writeText(decodeURIComponent(encoded)).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+      });
+    }
+
+    /* ─── AZURE TTS ──────────────────────────────────────────────────────────── */
+    async function speak(encoded, id) {
+      const text = decodeURIComponent(encoded);
+      const spkBtn = document.getElementById('spk-' + id);
+      const txtSpan = document.getElementById('txt-' + id);
+
+      // Stop current audio if this button is already playing
+      if (activeSpeakId === id && currentAudio) {
+        stopAudio();
+        spkBtn.textContent = '▶ Speak';
+        spkBtn.classList.remove('speaking');
+        txtSpan.textContent = '';
+        return;
+      }
+      stopAudio();
+
+      const sp = getSpeechConfig();
+      if (!sp.key) {
+        // Browser fallback
+        if (!window.speechSynthesis) { txtSpan.textContent = 'Add Speech key in Settings'; return; }
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'en-US'; utter.rate = 0.9;
+        txtSpan.textContent = 'Speaking (browser)…';
+        utter.onend = () => { txtSpan.textContent = ''; };
+        window.speechSynthesis.speak(utter);
+        return;
+      }
+
+      // Determine TTS REST endpoint
+      // If endpoint provided (e.g. https://switzerlandnorth.api.cognitive.microsoft.com/)
+      // derive region and use the standard TTS URL
+      const region = sp.region || regionFromUrl(sp.endpoint) || 'eastus';
+      const ttsUrl = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+
+      const voice = document.getElementById('ttsVoice').value || 'en-US-GuyNeural';
+      const rate = document.getElementById('ttsRate').value || '-10%';
+      const ssml = `<speak version='1.0' xml:lang='en-US'>
+  <voice name='${voice}'>
+    <prosody rate='${rate}'>${escSSML(text)}</prosody>
+  </voice>
+</speak>`;
+
+      spkBtn.textContent = '⏹ Stop';
+      spkBtn.classList.add('speaking');
+      txtSpan.textContent = 'Loading…';
+      activeSpeakId = id;
+
+      try {
+        const res = await fetch(ttsUrl, {
+          method: 'POST',
+          headers: {
+            'Ocp-Apim-Subscription-Key': sp.key,
+            'Content-Type': 'application/ssml+xml',
+            'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3'
+          },
+          body: ssml
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          txtSpan.textContent = `TTS error ${res.status}`;
+          console.error('Azure TTS error:', errText);
+          resetSpeak(id);
+          return;
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        currentAudio = new Audio(url);
+        currentAudio.play();
+        txtSpan.textContent = 'Playing…';
+        currentAudio.onended = () => {
+          URL.revokeObjectURL(url);
+          resetSpeak(id);
+        };
+      } catch (e) {
+        txtSpan.textContent = 'Error: ' + e.message;
+        resetSpeak(id);
+      }
+    }
+
+    function stopAudio() {
+      if (currentAudio) { try { currentAudio.pause(); } catch (_) { } currentAudio = null; }
+      activeSpeakId = null;
+    }
+    function resetSpeak(id) {
+      const btn = document.getElementById('spk-' + id);
+      const txt = document.getElementById('txt-' + id);
+      if (btn) { btn.textContent = '▶ Speak'; btn.classList.remove('speaking'); }
+      if (txt) { txt.textContent = ''; }
+      activeSpeakId = null;
+      currentAudio = null;
+    }
+
+    async function testTTS() {
+      const sp = getSpeechConfig();
+      if (!sp.key) { flash('ttsStatus', 'No Speech key configured', 'error'); return; }
+      flash('ttsStatus', 'Testing…', '');
+      const region = sp.region || regionFromUrl(sp.endpoint) || 'eastus';
+      const ttsUrl = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+      const voice = document.getElementById('ttsVoice').value || 'en-US-GuyNeural';
+      const rate = document.getElementById('ttsRate').value || '-10%';
+      const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${voice}'><prosody rate='${rate}'>StepWise. Guiding children toward their full potential.</prosody></voice></speak>`;
+      try {
+        const res = await fetch(ttsUrl, {
+          method: 'POST',
+          headers: {
+            'Ocp-Apim-Subscription-Key': sp.key,
+            'Content-Type': 'application/ssml+xml',
+            'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3'
+          },
+          body: ssml
+        });
+        if (!res.ok) { flash('ttsStatus', `Error ${res.status} — check Speech key`, 'error'); return; }
+        const audio = new Audio(URL.createObjectURL(await res.blob()));
+        audio.play();
+        flash('ttsStatus', '✅ Azure TTS working!', 'success');
+      } catch (e) {
+        flash('ttsStatus', 'Error: ' + e.message, 'error');
+      }
+    }
+
+    /* ─── AZURE STT (SPEECH TO TEXT) ─────────────────────────────────────────── */
+    function startSTT() {
+      const sp = getSpeechConfig();
+      if (!sp.key) {
+        alert("Please configure Azure Speech key in Settings first.");
+        return;
+      }
+
+      const btn = document.getElementById('btnMic');
+      btn.innerHTML = 'Listening…';
+      btn.style.background = '#e05252';
+
+      const region = sp.region || regionFromUrl(sp.endpoint) || 'eastus';
+
+      try {
+        const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(sp.key, region);
+        speechConfig.speechRecognitionLanguage = "en-US";
+        const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+
+        const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+
+        recognizer.recognizeOnceAsync(
+          function (result) {
+            btn.innerHTML = '<span style="margin-right:4px">🎤</span> Speak';
+            btn.style.background = '#1D9E75';
+
+            if (result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+              document.getElementById('aiQuestion').value = result.text;
+              setTimeout(() => askAI(), 300); // Auto submit to GPT
+            } else if (result.reason !== SpeechSDK.ResultReason.NoMatch) {
+              console.warn("Speech not recognized or error:", result);
+              alert("Could not recognize speech. Please try again.");
+            }
+            recognizer.close();
+          },
+          function (err) {
+            btn.innerHTML = '<span style="margin-right:4px">🎤</span> Speak';
+            btn.style.background = '#1D9E75';
+            console.error(err);
+            alert('STT Error: ' + err);
+            recognizer.close();
+          }
+        );
+      } catch (err) {
+        btn.innerHTML = '<span style="margin-right:4px">🎤</span> Speak';
+        btn.style.background = '#1D9E75';
+        alert("Microphone access denied or error: " + err);
+      }
+    }
+
+    /* ─── AZURE OPENAI ───────────────────────────────────────────────────────── */
+    async function askAI() {
+      const question = document.getElementById('aiQuestion').value.trim();
+      if (!question) return;
+
+      const oai = getOpenAIConfig();
+      if (!oai.key || !oai.endpoint) {
+        document.getElementById('aiResult').innerHTML =
+          `<div class="result-card" style="color:var(--color-text-secondary);font-size:13px">
+        ⚠️ Please configure Azure OpenAI keys in the <strong>Settings</strong> tab (or start via <code>node server.js</code> with your .env file).
+       </div>`;
+        return;
+      }
+
+      const resultEl = document.getElementById('aiResult');
+      resultEl.innerHTML = `<div class="ai-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:4px">Thinking as StepWise pitch expert…</span></div>`;
+
+      // Azure OpenAI endpoint format:
+      // {endpoint}/openai/deployments/{deployment}/chat/completions?api-version=2024-08-01-preview
+      const ep = oai.endpoint.replace(/\/$/, '');
+      const dep = oai.deployment || 'gpt-4o';
+      const url = `${ep}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`;
+
+      const systemPrompt = `You are the pitch expert for StepWise, an AI app for children with Down syndrome built on Microsoft Azure, created by Team SIRIUS (Imagine Cup 2026).
+
+Key facts:
+- 6M+ children with Down syndrome worldwide, 12M families
+- 75+ parents tested, 45+ children, 20+ upgrades, certified by psychomotricians May 2025
+- Azure services: GPT-4o Vision, Azure Speech STT+TTS, Pronunciation Assessment, Cosmos DB, Azure AI Foundry, WebRTC, MFA
+- Azure cost: $4.20/user/month → 79% gross margin at $20/month premium
+- $25K Microsoft Azure credit → 11 months at 500 users
+- Break-even: 300 paying users = $6,000 MRR
+- Market: SOM $300K Tunisia 2027, SAM $36M MENA 2028, TOM $2.1B global 2030
+- Business: Free / $20/month / Custom for organizations
+- Beta launch: November 2026
+- CAC: near-zero via associations, $8-12 blended, LTV:CAC = 40:1
+
+Answer in 3-5 sentences, confident and direct, as if you're the team presenting to Microsoft judges. Use real numbers. In English.`;
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'api-key': oai.key, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: question }
+            ],
+            max_tokens: 300,
+            temperature: 0.7
+          })
+        });
+
+        const data = await res.json();
+        if (data.error) {
+          resultEl.innerHTML = `<div class="result-card" style="color:#D85A30;font-size:13px">Azure OpenAI Error: ${data.error.message}</div>`;
+          return;
+        }
+
+        const answer = data.choices[0].message.content;
+        const sid = 'ai-' + Math.random().toString(36).substr(2, 6);
+        resultEl.innerHTML = `<div class="result-card ai">
+      <div class="slide-badge" style="margin-bottom:8px">AI Answer — Azure GPT</div>
+      <div class="answer-text" style="margin-bottom:8px">${answer}</div>
+      <div class="tts-bar">
+        <button class="btn-speak" id="spk-${sid}" onclick="speak('${encodeURIComponent(answer)}','${sid}')">▶ Speak</button>
+        <button class="btn-copy" onclick="copyText('${encodeURIComponent(answer)}',this)">Copy</button>
+        <span id="txt-${sid}" style="font-size:11px;color:var(--color-text-secondary)"></span>
+      </div>
+    </div>`;
+      } catch (e) {
+        resultEl.innerHTML = `<div class="result-card" style="color:#D85A30;font-size:13px">Connection error: ${e.message}</div>`;
+      }
+    }
+
+    /* ─── TABS ───────────────────────────────────────────────────────────────── */
+    function switchTab(tabId) {
+      const mainTabs = ['search', 'ai', 'settings', 'room'];
+      const tabsBar = document.querySelector('.tabs');
+      const qaBtn = document.getElementById('btn-qa-room');
+      const tabEls = document.querySelectorAll('.tab');
+
+      mainTabs.forEach(t => {
+        const el = document.getElementById('tab-' + t);
+        if (el) el.style.display = t === tabId ? 'block' : 'none';
+      });
+
+      tabEls.forEach(t => t.classList.remove('active'));
+
+      if (tabId === 'room') {
+        if (tabsBar) tabsBar.style.display = 'none';
+        if (qaBtn) qaBtn.style.display = 'none';
+      } else {
+        if (tabsBar) tabsBar.style.display = 'flex';
+        if (qaBtn) qaBtn.style.display = 'block';
+
+        // Find the right tab button to highlight
+        tabEls.forEach(btn => {
+          if (btn.textContent.toLowerCase().includes(tabId)) {
+            btn.classList.add('active');
+          }
+        });
+
+        if (tabId === 'settings') renderConfigBanner();
+      }
+    }
+
+    /* ─── START ──────────────────────────────────────────────────────────────── */
+    window.addEventListener('load', init);
+
+    /* ─── REAL-TIME ROOM LOGIC ──────────────────────────────────────────────── */
+    let socket;
+    let myName = '';
+
+    function openNameDialog() {
+      document.getElementById('room-overlay').style.display = 'flex';
+      document.getElementById('userNameInput').focus();
+    }
+
+    function closeNameDialog() {
+      document.getElementById('room-overlay').style.display = 'none';
+    }
+
+    function joinRoom() {
+      const name = document.getElementById('userNameInput').value.trim();
+      if (!name) return;
+      myName = name;
+      closeNameDialog();
+
+      if (!socket) {
+        socket = io();
+
+        socket.on('update-users', (users) => {
+          renderUsers(users);
+        });
+
+        socket.on('user-action', (data) => {
+          if (data.name !== myName) {
+            showToast(`${data.name} chose ${data.num}`);
+          }
+        });
+      }
+
+      socket.emit('join', myName);
+      switchTab('room');
+    }
+
+    function renderUsers(users) {
+      const grid = document.getElementById('user-grid');
+      if (!grid) return;
+      grid.innerHTML = users.map(u => {
+        const isMe = u.id === socket.id; // Correct way to identify myself in the list
+        const nums = [4, 6, 8, 9];
+        return `
+      <div class="user-card ${isMe ? 'me' : ''}">
+        <div class="user-name" title="${u.name}">${isMe ? 'You' : u.name}</div>
+        <div class="num-row">
+          ${nums.map(n => `
+            <div class="num-btn ${u.selectedNumber === n ? 'active' : ''}" 
+                 onclick="${isMe ? `chooseNumber(${n})` : ''}">${n}</div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+      }).join('');
+    }
+
+    function chooseNumber(num) {
+      if (socket) socket.emit('choose-number', num);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('action-toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
+    function leaveRoom() {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+      switchTab('search');
+    }
+  </script>
+</body>
+
+</html>
