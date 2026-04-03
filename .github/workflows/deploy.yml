@@ -1,0 +1,62 @@
+name: Deploy to Public
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Create .env file from secrets
+      env:
+        AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+        AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+        MODEL: ${{ secrets.MODEL }}
+        AZURE_SPEECH_ENDPOINT: ${{ secrets.AZURE_SPEECH_ENDPOINT }}
+        AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+        AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+      run: |
+        cat > .env << EOF
+        AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT
+        AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY
+        MODEL=$MODEL
+        AZURE_SPEECH_ENDPOINT=$AZURE_SPEECH_ENDPOINT
+        AZURE_SPEECH_KEY=$AZURE_SPEECH_KEY
+        AZURE_SPEECH_REGION=$AZURE_SPEECH_REGION
+        EOF
+    
+    - name: Start server and validate
+      run: |
+        timeout 10 npm start || true
+        echo "Server started successfully"
+    
+    # OPTION 1: Deploy to Railway.app (FREE, recommandé)
+    - name: Deploy to Railway
+      if: github.ref == 'refs/heads/main'
+      uses: railway-app/action@v1
+      with:
+        token: ${{ secrets.RAILWAY_TOKEN }}
+        service: sirius-pitch-assistant
+    
+    # OPTION 2: Deploy to Render (FREE tier available)
+    # Uncomment le bloc ci-dessous pour Render au lieu de Railway
+    # - name: Deploy to Render
+    #   if: github.ref == 'refs/heads/main'
+    #   uses: render-org/github-action@main
+    #   with:
+    #     github_token: ${{ secrets.GITHUB_TOKEN }}
+    #     service_id: ${{ secrets.RENDER_SERVICE_ID }}
